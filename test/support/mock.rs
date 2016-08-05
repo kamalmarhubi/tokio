@@ -84,9 +84,23 @@ impl<In: fmt::Debug, Out: fmt::Debug> TransportHandle<In, Out> {
         self.inner.lock().unwrap().send(Err(e));
     }
 
-    pub fn assert_flush(&self) {
-        self.inner.lock().unwrap().allow_write(WriteCap::Flush);
+    pub fn allow_write(&self) {
+        self.inner.lock().unwrap().allow_write(WriteCap::Write);
+    }
 
+    pub fn next_write(&self) -> In {
+        match self.rx.recv().unwrap() {
+            Write::Write(v) => v,
+            Write::Flush => panic!("expected write; actual=Flush"),
+            Write::Drop => panic!("expected flush; actual=Drop"),
+        }
+    }
+
+    pub fn allow_flush(&self) {
+        self.inner.lock().unwrap().allow_write(WriteCap::Flush);
+    }
+
+    pub fn assert_flush(&self) {
         match self.rx.recv().unwrap() {
             Write::Flush => {},
             Write::Write(v) => panic!("expected flush; actual={:?}", v),
@@ -95,8 +109,6 @@ impl<In: fmt::Debug, Out: fmt::Debug> TransportHandle<In, Out> {
     }
 
     pub fn assert_drop(&self) {
-        self.inner.lock().unwrap().allow_write(WriteCap::Flush);
-
         match self.rx.recv().unwrap() {
             Write::Drop => {},
             Write::Write(v) => panic!("expected flush; actual={:?}", v),
@@ -104,14 +116,9 @@ impl<In: fmt::Debug, Out: fmt::Debug> TransportHandle<In, Out> {
         }
     }
 
-    pub fn next_write(&self) -> In {
-        self.inner.lock().unwrap().allow_write(WriteCap::Flush);
-
-        match self.rx.recv().unwrap() {
-            Write::Write(v) => v,
-            Write::Flush => panic!("expected write; actual=Flush"),
-            Write::Drop => panic!("expected flush; actual=Drop"),
-        }
+    pub fn allow_and_assert_drop(&self) {
+        self.allow_write();
+        self.assert_drop();
     }
 }
 
